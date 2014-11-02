@@ -1,0 +1,39 @@
+---
+title: "Análise de Séries Temporais Financeiras"
+output: pdf_document
+---
+
+A série de dados foi obtida pelo site da Vale do Rio Doce por meio do seguinte link: http://www.vale.com/brasil/PT/investors/equity-debt/stock-price-history/Paginas/default.aspx. No arquivo temos a informação do preço de fechamento e preço de fechamento ajustado dos valores das ações da Vale desde o dia 3 de Janeiro de 2000 até o dia 30 de Outubro de 2014.
+
+# Leitura no `R`
+
+A leitura da série no R foi feita utilizando o comando a seguir;
+
+```{r}
+serie <- read.table("dados/serie_vale3.txt", header = T, sep = "\t", dec = ",")
+```
+
+Para transformar a coluna 'data' em um formato de data dentro do R, utilizamos o comando a seguir:
+
+```{r}
+serie$data <- as.Date(serie$data, format = "%d/%m/%Y")
+```
+
+Neste momento também calculamos os log-retornos $r_t$ da série que são dados por:
+
+$$r_t = \log \left( \frac{P_t}{P_{t-1}} \right)$$
+
+No `R` utilizamos o comando abaixo:
+
+```{r}
+serie$r <- c(NA, log(serie$fechamento.ajustado[2:3668]/
+                 serie$fechamento.ajustado[1:3667]))
+```
+
+
+
+
+
+
+
+
