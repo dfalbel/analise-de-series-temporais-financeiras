@@ -1,19 +1,24 @@
 ---
 title: "Análise de Séries Temporais Financeiras"
-output: pdf_document
+author: Anna Beatriz Ayumi Sato, Daniel Vasconcellos Figueiredo Falbel, Júlia Ferreira
+  Aquino Silva
+output:
+  pdf_document:
+    fig_caption: yes
+    fig_height: 3
 ---
 
 A série de dados foi obtida pelo site da Vale do Rio Doce por meio do seguinte link: http://www.vale.com/brasil/PT/investors/equity-debt/stock-price-history/Paginas/default.aspx. No arquivo temos a informação do preço de fechamento e preço de fechamento ajustado dos valores das ações da Vale desde o dia 3 de Janeiro de 2000 até o dia 30 de Outubro de 2014.
 
 # Leitura no `R`
 
-A leitura da série no R foi feita utilizando o comando a seguir;
+A leitura da série no `R` foi feita utilizando o comando a seguir;
 
 ```{r}
 serie <- read.table("dados/serie_vale3.txt", header = T, sep = "\t", dec = ",")
 ```
 
-Para transformar a coluna 'data' em um formato de data dentro do R, utilizamos o comando a seguir:
+Para transformar a coluna 'data' em um formato de data, utilizamos o comando a seguir:
 
 ```{r}
 serie$data <- as.Date(serie$data, format = "%d/%m/%Y")
@@ -30,6 +35,37 @@ serie$r <- c(NA, log(serie$fechamento.ajustado[2:3668]/
                  serie$fechamento.ajustado[1:3667]))
 ```
 
+
+# Análise descritiva
+
+Como análise descritiva da série fizemos os gráficos a seguir. Primeiro observamos os valores verdadeiros da série e em seguida observamos o comportamento do log-retorno.
+
+Na figura 1 vemos que a série teve uma tendência de crescimento acelerado até o ano de 2008. Em 2009 teve uma forte queda, mas logo os valores voltaram a subir. Desde o ano de 2010 a série apresenta uma tendência de queda nos preços dos ativos.
+
+```{r, fig.cap="Gráfico dos preços da série VALE3 do ano 2000 até o final de outubro de 2014", warning=FALSE}
+library(ggplot2)
+qplot(x = data, y = fechamento.ajustado, geom = "line", data = serie) +
+  xlab("Data") + 
+  ylab("Valor de Fechamento Ajustado (R$)") + 
+  theme(axis.title = element_text(size = rel(0.7)))
+```
+
+A figura 2, que mostra o log-retorno, mostra que a série não apresenta tendência e que a média dos log-retornos parece ser próxima de zero. No ano de 2009, a série apresenta um grande distúrbio causado pela grande variação dos preços naquele período.
+
+
+```{r, fig.cap="Gráfico dos log-retorno dos preços da série VALE3 do ano 2000 até o final de outubro de 2014", warning=FALSE}
+qplot(x = data, y = r, geom = "line", data = serie) +
+  xlab("Data") + 
+  ylab("Log-Retorno do Valor de Fechamento Ajustado") + 
+  theme(axis.title = element_text(size = rel(0.7)))
+```
+
+A figura 3 mostra a distribuição dos log-retornos. Ela é aparentemente simétrica em torno do zero e parece ser próxima da distribuição Normal, no entanto ela apresenta uma cauda que é possívelmente mais pesada do que a da Normal.
+
+```{r, fig.cap="Gráfico da distribuição dos log-retornos", warning=FALSE, message=FALSE}
+ggplot(serie, aes(r)) + geom_histogram(aes(y = ..density..), colour = "white") +
+  geom_density() + xlab("Log-Retorno") + ylab("Densidade")
+```
 
 
 
