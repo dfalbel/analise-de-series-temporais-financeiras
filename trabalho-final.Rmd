@@ -1,5 +1,5 @@
 ---
-title: "Análise de Séries Temporais Financeiras"
+title: "Modelagem em Séries Temporais Financeiras"
 author: Anna Beatriz Ayumi Sato, Daniel Vasconcellos Figueiredo Falbel, Júlia Ferreira
   Aquino Silva
 output:
@@ -66,6 +66,242 @@ A figura 3 mostra a distribuição dos log-retornos. Ela é aparentemente simét
 ggplot(serie, aes(r)) + geom_histogram(aes(y = ..density..), colour = "white") +
   geom_density() + xlab("Log-Retorno") + ylab("Densidade")
 ```
+
+
+# Cálculo do VaR pelo método RiskMetrics
+
+
+
+O cálculo do VaR usando o `R` pode ser feito usando uma função feita pelo Ruey S. Tsay para o seu livro "An Introduction to Analysis of Financial Data with R" que pode ser obtida neste link: http://faculty.chicagobooth.edu/ruey.tsay/teaching/introTS/RMfit.R. O código utilizado está abaixo.
+
+```{r}
+source("funcoes/RMfit.R")
+mm <- RMfit(serie$r[-1])
+```
+
+
+
+Para começar vamos estimar o modelo IGARCH(1,1) para obter uma estimativa do parâmetro $\alpha$. Nesse caso obtivemos o valor: `r mm$par`. Também temos que a volatilidade ajustada para a última observação foi `r mm$volatility[length(mm$volatility)]` e o último log-retorno observado foi `r serie$r[3668]` Então podemos estimar a volatilidade um passo a frente usando a seguinte fórmula:
+
+$$\sigma^2_{3669} = \hat{\alpha}(\hat{\sigma_{3668}})^2 + (1- \hat{\alpha})(r_{3668})^2 $$
+
+Então o valor estimado foi:
+
+```{r, echo=FALSE}
+a <- mm$par
+v <- mm$volatility[length(mm$volatility)]
+s <- serie$r[3668]
+v2 <- a*v^2 + (1-a)*s^2
+var = 10000*1.69*sqrt(v2)
+```
+
+$$ \sigma^2_{3669} = 0,958553*0,000474525 + (1 - 0,95855)(0,001914447) = 0,0005342054$$
+
+
+Em seguida utilizando o método RiskMetrics com confiança de 95% temos que o VaR é dado por:
+
+$$VaR[1] = 10.000*1,65*\sigma_{3669} = R\$390,6077$$
+
+O VaR[5] é calculado multiplicando o $VaR[1]*\sqrt{5}$ então temos que $VaR[5] = R\$873.4254$.
+
+Como consideramos a distribuição Normal que é simetrica, não existe diferença nas estimativas do VaR para posições compradas e vendidas.
+
+
+
+# Cálculo utilizando a teoria dos valores extremos
+
+
+No caso do TVE ficou:
+
+Posição vendida:
+    Var[1] = R$341,9102
+    Var[5] = R$421,0283
+
+Posição comprada:
+    Var[1] = R$320,2746
+    Var[5] = R$270,5744
+
+O código em `R` utilizado para o cálculo está abaixo:
+
+```{r, eval = F}
+r<-t[-seq(1,13,1),1]
+
+mx<-1:174
+mn<-1:174
+
+aux=1
+for (i in 1:174){
+
+mx[i]<-max(r[aux:(aux+20)])
+mn[i]<-min(r[aux:(aux+20)])
+aux=aux+21
+
+}
+
+library(ismev)
+
+#posicao vendida
+gev.fit(mx)
+VaR= 0.03527705-(
+  (0.01468186/0.12933211)*
+  	(1-
+			(
+				(-21*log(.95))^(-0.12933211)
+			)
+		)
+	)
+VaR*10000
+(5^0.12933211)*VaR*10000
+
+
+#posicao comprada
+gev.fit(-mn)
+VaR= -0.03304296+
+	(
+		(0.01371588/0.10477671)*
+		(1-
+			(
+				(-21*log(.95))^(-0.10477671)
+			)
+		)
+	)
+abs(VaR*10000)
+abs((5^(-0.10477671))*VaR*10000)
+```
+
+
+# Cálculo pelo método dos quantis-empíricos
+
+Os valores do quantis empíricos são:
+
+VaR(1) para posição vendida = q(0,95) = 0.03732015
+VaR(1) para posição comprada = q(0,05) = -0.03505672
+
+Como o valor é 10000, fica:
+
+Posição vendida:
+VaR(1) = R$373,20
+
+Posição comprada:
+VaR(1) = R$350,57
+
+Para o cálculo utilizamos o seguinte código no `R`:
+
+```{r, eval = F}
+varqe = 10000*quantile(na.omit(serie$r), probs=c(0.05, 0.95))
+```
+
+Para esse método, não é possível calcular o VaR cinco passos a frente.
+
+# Cálculo utilizando o ARMA + GARCH(1,1)
+
+
+Ajuste do ARMA:
+
+```{r}
+acf(serie$r[-1], main="Autocorrelação dos log-retornos da Vale")
+pacf(serie$r[-1], main="Autocorrelação parcial dos log-retornos da Vale")
+```
+
+Vemos que a autocorrelação da série de log retornos da Vale é não significativa a partir do lag 1, assim como a autocorrelação parcial. Assim, não é necessário ajustar um modelo ARMA para a série.
+Ajustando um modelo GARCH(1,1) para a série:
+
+```{r}
+library(fGarch)
+mnormal = garchFit(~garch(1,1),data=serie$r[-1],trace=F)
+summary(mnormal)
+
+mtstud = garchFit(~garch(1,1),data=serie$r[-1],trace=F, cond.dist="std")
+summary(mtstud)
+```
+
+
+Escolheremos o modelo que apresenta o menor AIC.
+O AIC do modelo com distribuição normal é -4.811989. Já o AIC do modelo com distribução t-student é -4.845354. 
+Escolhemos, portanto, o modelo com distriuição condicional t-student com 7 graus de liberdade.
+
+O modelo fica:
+
+$$r_t = 7,567 \times 10^{-4} + a_t, \quad a_t = \sigma_t \varepsilon_t, \quad \varepsilon_t \sim t_{7}$$
+$$\sigma^2_t = 9,39 \times 10^{-6} + 0,05413a^2_{t-1} + 0,9284\sigma^1_{t-1}$$
+
+Escolhido o modelo, obtemos o VaR:
+
+Inicialmente, calculamos a previsão da série de log-retornos 1 e 5 passos a frente.
+
+```{r}
+predict(mtstud, n.ahead=5)
+```
+
+Agora, calcularemos o Var utilizando a função abaixo, desenvolvida por Ruey S. Tsay:
+
+```{r}
+"RMeasure" <- function(mu,sigma,cond.dist="norm",df=0){
+  # calculate VaR and ES for a specified conditional distribution
+  # p = 0.05, 0.01, 0.001
+  #
+  # cond.dist = "norm", "t", "std"
+  prob=c(0.95,0.05)
+  if(cond.dist=="norm"){
+    q1=qnorm(prob)
+    d1=dnorm(q1)
+    VaR=mu+q1*sigma
+    ES=mu+d1/(1-prob)*sigma
+    tt=cbind(prob,VaR,ES)
+  }
+  #
+  if(cond.dist=="std"){
+    library(fGarch)
+    if(df < 2.001)df=2.01
+    q1=qstd(prob,nu=df)
+    d1=dstd(q1,nu=df)
+    VaR=mu+q1*sigma
+    ES=mu+sigma*(d1/(1-prob))*(((df-2)+q1^2)/(df-1))
+    tt=cbind(prob,VaR,ES)
+  }
+  #
+  if(cond.dist=="t"){
+    if(df < 2.01)df=2.01
+    q1=qt(prob,df)
+    d1=dt(q1,df)
+    #VaR=mu+q1*sigma
+    VaR=mu+q1*sigma/sqrt(df/(df-2))
+    ES=mu+sigma/sqrt(df/(df-2))*(d1/(1-prob))*((df+q1^2)/(df-1))
+    tt=cbind(prob,VaR,ES)
+  }
+  cat("\n Risk Measures for selected probabilities: \n")
+  print(tt)
+  
+  RMeasure <- list(results=tt)
+}
+```
+  
+Calculando o VaR(1):
+
+```{r}
+RMeasure(0.0007567318,0.02591705)
+```
+
+Assim, o VaR(1) para posição vendida é 0.04338649, e para posição comprada é -0.04187302.
+
+Portanto:
+  
+$$VaR(1)_{vendida} = 10000*0.04338649 = R\$433,86$$
+$$VaR(1)_{comprada} = 10000*0.04187302 = R\$418,73$$
+  
+
+Calculando o VaR[5]:
+
+```{r}
+RMeasure(0.0007567318,0.02573931)
+```
+
+Assim, o VaR[5] para posição vendida é 0.04309413, e para posição comprada é -0.04158067.
+
+Portanto:
+  
+  $$VaR[5]_{vendida} = 10000*0.04309413 = R\$430,94$$
+  $$VaR[5]_{comprada} = 10000*0.04158067 = R\$415,81$$
 
 
 
